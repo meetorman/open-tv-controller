@@ -1,0 +1,21 @@
+# A user unit for an installed orman-tv-controller (open-tv-controller; uv tool install / pip install --user):
+#   install -m 644 deploy/orman-tv-controller.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now orman-tv-controller
+#   loginctl enable-linger "$USER"     # so it starts at boot, before anyone logs in
+# Settings go in ~/.config/orman-tv-controller.env (ORMAN_TVCTL_TV_ADDRESSES, ...; ORMAN_TVCTL_PROVIDER only to pin a provider).
+[Unit]
+Description=Open TV controller (TVs on the home network; Bonjour _orman-tvctl._tcp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.config/orman-tv-controller.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=%h/.local/bin/orman-tv-controller serve
+Restart=always
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=default.target

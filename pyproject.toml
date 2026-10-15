@@ -1,0 +1,38 @@
+[project]
+name = "orman-tv-controller"
+version = "0.6.0"                      # must match orman_tv_controller.__version__
+description = "Open TV controller: controls the TVs on a home network for its clients (pyatv first), found by Bonjour"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+# pyatv brings aiohttp (the HTTP server), zeroconf (Bonjour) and ifaddr.
+# 0.17 added tvOS's TV Remote session; tvOS 26 refuses Companion commands without it.
+dependencies = ["pyatv>=0.17,<0.19"]
+
+[project.urls]
+Homepage = "https://github.com/meetorman/open-tv-controller"
+
+[project.scripts]
+orman-tv-controller = "orman_tv_controller.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/orman_tv_controller"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
