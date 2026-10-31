@@ -117,6 +117,7 @@ def test_apple_tv_filter():
         (exceptions.AuthenticationError("x"), errors.NotPaired),
         (exceptions.ConnectionFailedError("x"), errors.Unreachable),
         (OSError("no route"), errors.Unreachable),
+        (exceptions.ProtocolError("Command _launchApp failed"), errors.Unavailable),
     ],
 )
 def test_translate(exc, kind):
@@ -125,6 +126,20 @@ def test_translate(exc, kind):
 
 def test_translate_unknown():
     assert d.translate(ValueError("x"), "Den") is None
+
+
+def test_companion_command_timeout_is_actionable_without_connection_retry():
+    try:
+        try:
+            raise TimeoutError("Companion reply did not arrive")
+        except TimeoutError as cause:
+            raise exceptions.ProtocolError("Command _launchApp failed") from cause
+    except exceptions.ProtocolError as error:
+        translated = d.translate(error, "Den")
+        assert isinstance(translated, errors.TvTimeout)
+        assert translated.code == "tv_timeout"
+        assert "Refresh its state" in translated.message
+        assert not d.PyatvDriver.__new__(d.PyatvDriver).is_connection_error(error)
 
 
 async def test_unpair_forgets_the_credentials(tmp_path):
