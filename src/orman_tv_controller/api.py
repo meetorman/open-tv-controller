@@ -346,9 +346,16 @@ async def power_set(request: web.Request) -> web.Response:
     if power in ("on", "off"):
         # Record the initiator before the driver acts: a TV can sleep before
         # its remote command reply arrives. Never log tokens or request bodies.
-        log.info("TV power request %s", json.dumps({
-            "tv": tv[:128], "power": power, "peer": (request.remote or "unknown")[:128],
-        }))
+        log.info(
+            "TV power request %s",
+            json.dumps(
+                {
+                    "tv": tv[:128],
+                    "power": power,
+                    "peer": (request.remote or "unknown")[:128],
+                }
+            ),
+        )
     return _json(await request.app[CONTROLLER].set_power(tv, power))
 
 
