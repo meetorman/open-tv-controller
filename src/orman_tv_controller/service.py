@@ -152,8 +152,8 @@ class Controller:
         act: Callable[[TvSession], Awaitable[Any]],
     ) -> Any:
         """Run `act` on the TV's session: the TV must list `need`, and it must be
-        usable now. A dropped connection, or a kept one that says `need` isn't
-        usable now, is retried once on a fresh one."""
+        usable now. A failed connection refreshes that TV's discovery details
+        before one retry. An action on a newly opened session is never replayed."""
         entry = await self.entry(entry_id)
         if not entry.found.paired:
             raise errors.NotPaired(
@@ -163,9 +163,11 @@ class Controller:
         async with entry.lock:
             for attempt in (1, 2):
                 fresh = entry.session is None
+                connected = False
                 try:
                     async with asyncio.timeout(self.call_timeout_s):
                         session = await self._session(entry)
+                        connected = True
                         if need is not None:
                             if need not in (entry.capabilities or ()):
                                 raise errors.Unsupported(
@@ -187,8 +189,14 @@ class Controller:
                 except errors.ControllerError as err:
                     if isinstance(err, errors.Unreachable | errors.NotPaired):
                         await self._drop(entry)
-                        if isinstance(err, errors.Unreachable) and attempt == 1 and not fresh:
-                            continue
+                        if (
+                            isinstance(err, errors.Unreachable)
+                            and attempt == 1
+                            and (not fresh or not connected)
+                        ):
+                            refreshed = await self._rediscover(entry)
+                            if refreshed or not fresh:
+                                continue
                         if isinstance(err, errors.Unreachable):
                             entry.reachable = False
                     else:
@@ -201,8 +209,14 @@ class Controller:
                     ) from None
                 except Exception as err:
                     await self._drop(entry)
-                    if attempt == 1 and not fresh and entry.driver.is_connection_error(err):
-                        continue
+                    if (
+                        attempt == 1
+                        and (not fresh or not connected)
+                        and entry.driver.is_connection_error(err)
+                    ):
+                        refreshed = await self._rediscover(entry)
+                        if refreshed or not fresh:
+                            continue
                     known = entry.driver.translate(err, entry.found.name)
                     if known is None:
                         raise
@@ -210,6 +224,20 @@ class Controller:
                         entry.reachable = False
                     raise known from None
         raise AssertionError("unreachable")  # pragma: no cover
+
+    async def _rediscover(self, entry: Entry) -> bool:
+        """Refresh one stable hardware identity, without touching other sessions."""
+        try:
+            found = await self._scan_one(entry.driver)
+        except Exception:
+            return False
+        matches = [
+            tv for tv in found if tv.driver == entry.driver.name and tv.key == entry.found.key
+        ]
+        if len(matches) != 1 or not matches[0].paired:
+            return False
+        entry.found = matches[0]
+        return True
 
     async def _session(self, entry: Entry) -> TvSession:
         if entry.closer is not None:
