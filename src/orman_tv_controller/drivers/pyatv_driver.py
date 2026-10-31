@@ -108,6 +108,14 @@ def translate(err: BaseException, what: str) -> errors.ControllerError | None:
         return errors.NotPaired(f"{what} isn't paired with this controller.")
     if is_pyatv_error(err, "ConnectionFailedError", "ConnectionLostError", "NoServiceError"):
         return errors.Unreachable(f"Couldn't reach {what}: {err}")
+    if is_pyatv_error(err, "ProtocolError"):
+        # Companion wraps a missing command reply in ProtocolError. The action
+        # may already have applied, so report it without replaying the command.
+        if isinstance(err.__cause__, TimeoutError):
+            return errors.TvTimeout(
+                f"{what} didn't confirm that action. Refresh its state before trying again."
+            )
+        return errors.Unavailable(f"{what} couldn't confirm that action: {err}")
     if is_pyatv_error(err, "BlockedStateError", "CommandError"):
         return errors.Unavailable(f"{what} can't do that right now: {err}")
     if isinstance(err, OSError):
